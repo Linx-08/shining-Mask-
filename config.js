@@ -1,24 +1,19 @@
-export const APP_VERSION = 'v5.8';
+export const APP_VERSION = 'v5.8-glasses';
 
-// Tunables. Decoding the Bishop Fox face data shows the mask expects 46x58
-// pixels sent column by column (each column top to bottom, left column first).
-export const WIDTH = 46;
-export const HEIGHT = 58;
-export const ORDER = 'cols';   // 'rows' = row-major, 'cols' = column-major
+// GLASSES (SL-012/SL-015): 12x36 Pixel
+export const WIDTH = 12;
+export const HEIGHT = 36;
+export const ORDER = 'rows';   // falls das F-Testmuster falsch erscheint: 'cols'
 export const FLIP_X = false;
 export const FLIP_Y = false;
 
-// First row below the eye holes; "Below the eyes" mode fits the image under it.
-export const EYE_LINE_Y = 20;
+export const EYE_LINE_Y = 0;
+export const MAX_FRAMES = 10;
+export const SLOT_START = 1;
 
-export const MAX_FRAMES = 10;  // PLAY takes at most 10 slot ids
-export const SLOT_START = 1;   // first DIY slot used; frames go to SLOT_START..SLOT_START+n-1
+export const NAME_PREFIX = 'GLASSES-';
 
-// Masks advertise as MASK-xxxxxx. The chooser only lists names with this prefix,
-// so unrelated BLE gear (speakers etc.) never shows up. "Scan all" bypasses it.
-export const NAME_PREFIX = 'MASK-';
-
-export const SERVICE ='0000fff0-0000-1000-8000-00805f9b34fb';
+export const SERVICE = '0000fff0-0000-1000-8000-00805f9b34fb';
 export const CMD_CHAR = 'd44bc439-abfd-45a2-b575-925416129600';
 export const NOTIFY_CHAR = 'd44bc439-abfd-45a2-b575-925416129601';
 export const UPLOAD_CHAR = 'd44bc439-abfd-45a2-b575-92541612960a';
