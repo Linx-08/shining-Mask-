@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mask Cast</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#111111">
+<style>
+  :root { --bg:#111; --fg:#eee; --muted:#999; --accent:#ff7a18; --card:#1d1d1d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:16px system-ui, sans-serif; max-width:480px; margin-inline:auto; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  .card { background:var(--card); border-radius:12px; padding:12px; margin-bottom:12px; }
+  label { display:block; margin:8px 0 4px; color:var(--muted); font-size:14px; }
+  button { background:var(--accent); color:#000; border:0; border-radius:10px; padding:12px 16px; font-size:16px; font-weight:600; width:100%; margin-top:8px; }
+  button.secondary { background:#333; color:var(--fg); }
+  button:disabled { opacity:.5; }
+  input[type=range] { width:100%; }
+  .row { display:flex; gap:12px; align-items:center; }
+  .row label { margin:0; color:var(--fg); }
+  canvas { display:block; width:100%; max-width:300px; margin:8px auto; }
+  progress { width:100%; }
+  #status { font-weight:600; }
+  /* Floats over the page (no layout shift, so buttons never move under your finger); tap to dismiss. */
+  .note { position:fixed; top:8px; left:50%; transform:translateX(-50%); width:min(448px, calc(100% - 32px)); z-index:10; margin:0; padding:8px 12px; background:#2a2a2a; border:1px solid #444; border-radius:10px; font-size:14px; white-space:pre-line; box-shadow:0 2px 10px rgba(0,0,0,.5); cursor:pointer; }
+  .note.error { border-color:#ff6b6b; color:#ffb4b4; }
+  .status { margin:6px 0 0; font-size:13px; color:var(--muted); white-space:pre-line; }
+  .status.error { color:#ff8a8a; }
+  .status.ok { color:#5ad17a; }
+  #browserBanner a { color:var(--accent); }
+  select { width:100%; padding:10px; border-radius:10px; border:1px solid #333; background:#111; color:var(--fg); font-size:16px; }
+  .hint-inline { color:var(--muted); font-size:12px; }
+  .tools { display:flex; gap:8px; margin-top:10px; }
+  .tools button { flex:1; width:auto; margin:0; padding:10px 4px; font-size:14px; }
+  button.on { background:var(--accent); color:#000; }
+  .hint { color:var(--muted); font-size:13px; margin:8px 0 0; }
+  summary { cursor:pointer; }
+  #url { flex:1; min-width:0; padding:10px; border-radius:10px; border:1px solid #333; background:#111; color:var(--fg); font-size:16px; }
+  #diag { font:11px ui-monospace, monospace; color:var(--muted); white-space:pre-wrap; word-break:break-all; max-height:320px; overflow:auto; margin:8px 0 0; }
+  #log { font:12px ui-monospace, monospace; color:var(--muted); white-space:pre-wrap; max-height:140px; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>Mask Cast <small id="ver" style="color:var(--muted);font-size:12px"></small></h1>
+
+<div id="note" class="note" hidden></div>
+
+<div id="browserBanner" class="card" hidden>
+  <strong>Bluetooth only works in Chrome.</strong> This browser can't talk to the mask.
+  <a id="chromeLink" href="#">Open in Chrome</a>, then install the app from Chrome's menu so
+  Share → Mask Cast opens there.
+</div>
+
+<div class="card">
+  <div id="status">Not connected</div>
+  <button id="connect">Connect to mask</button>
+  <button id="scanAll" class="secondary">Scan all devices (diagnostic)</button>
+</div>
+
+<div class="card">
+  <input id="file" type="file" accept="image/gif,image/*,video/*" hidden>
+  <button id="pick" class="secondary">Choose GIF / video</button>
+  <div class="row" style="margin-top:8px">
+    <input id="url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste a link, or copy an image and press Load">
+    <button id="loadUrl" class="secondary" style="width:auto;margin:0;min-width:84px">Load</button>
+  </div>
+  <div id="loadStatus" class="status" hidden></div>
+  <canvas id="preview" width="588" height="732"></canvas>
+  <div id="name" style="text-align:center;color:var(--muted);font-size:14px">Nothing loaded</div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <label><input type="radio" name="mode" value="full" checked> Full mask</label>
+    <label><input type="radio" name="mode" value="below"> Below the eyes</label>
+  </div>
+  <label>Size: <span id="sizeVal">100%</span> <span class="hint-inline">(100% fills the area)</span></label>
+  <input id="size" type="range" min="20" max="300" step="1" value="100">
+  <label>Left &harr; right: <span id="posXVal">0</span></label>
+  <input id="posX" type="range" min="-46" max="46" step="0.5" value="0">
+  <label>Up &harr; down: <span id="posYVal">0</span></label>
+  <input id="posY" type="range" min="-58" max="58" step="0.5" value="0">
+  <label>Rotate: <span id="rotVal">0&deg;</span> <span class="hint-inline">(clockwise)</span></label>
+  <input id="rot" type="range" min="-180" max="180" step="1" value="0">
+  <div class="tools">
+    <button id="rotL" class="secondary" title="Rotate 90&deg; anticlockwise">&#10226; 90&deg;</button>
+    <button id="rotR" class="secondary" title="Rotate 90&deg; clockwise">&#10227; 90&deg;</button>
+    <button id="flipH" class="secondary" aria-pressed="false" title="Mirror left &harr; right">Flip &harr;</button>
+    <button id="flipV" class="secondary" aria-pressed="false" title="Mirror top &harr; bottom">Flip &varr;</button>
+  </div>
+  <button id="viewReset" class="secondary" style="margin-top:10px">Reset framing</button>
+  <label>Preview style</label>
+  <select id="style">
+    <option value="mask">Mask (LED look)</option>
+    <option value="plain">Plain pixels</option>
+  </select>
+  <label>Eye line (row): <span id="eyeVal">20</span></label>
+  <input id="eye" type="range" min="0" max="57" value="20">
+  <label>Frames: <span id="nVal">5</span> <span class="hint-inline">(fewer frames = shorter, safer uploads)</span></label>
+  <input id="frames" type="range" min="1" max="10" value="5">
+  <label>Brightness: <span id="bVal">50</span></label>
+  <input id="bright" type="range" min="10" max="128" value="50">
+  <label>Contrast (gamma): <span id="gVal">2.6</span></label>
+  <input id="gamma" type="range" min="1" max="2.6" step="0.1" value="2.6">
+  <p class="hint">The mask's LEDs are brighter in the mid-tones than a screen, which flattens contrast. Raise this if the mask looks washed out. The preview shows the effect.</p>
+  <label class="row"><input id="stay" type="checkbox"> Stay connected after sending</label>
+</div>
+
+<button id="send" disabled>Send to mask</button>
+<progress id="prog" value="0" max="1" hidden></progress>
+
+<div class="card" style="margin-top:12px">
+  <label>Calibration pattern</label>
+  <select id="pattern">
+    <option value="orient">Orientation (big F)</option>
+    <option value="cols">Column colour bars</option>
+    <option value="rows">Row colour bars</option>
+    <option value="rings">Rings (what is visible)</option>
+    <option value="eye">Eye line</option>
+  </select>
+  <button id="test" class="secondary" disabled>Send pattern</button>
+  <p class="hint">The preview above is what the mask should show, seen from outside. Lower the brightness to about 20 and photograph from a bit further away to avoid glare and banding.</p>
+</div>
+
+<details class="card">
+  <summary>Mask layout (fix mirrored, upside-down or wrong colours)</summary>
+  <label>Pixel order</label>
+  <select id="order">
+    <option value="cols">Columns (default)</option>
+    <option value="rows">Rows</option>
+  </select>
+  <label class="row"><input id="flipX" type="checkbox"> Fix mask: flip left &harr; right</label>
+  <label class="row"><input id="flipY" type="checkbox"> Fix mask: flip top &harr; bottom</label>
+  <label>Colour order</label>
+  <select id="colors">
+    <option value="RGB">RGB (default)</option>
+    <option value="RBG">RBG</option>
+    <option value="GRB">GRB</option>
+    <option value="GBR">GBR</option>
+    <option value="BRG">BRG</option>
+    <option value="BGR">BGR</option>
+  </select>
+  <p class="hint">Send the F pattern, then fix what you see: mirrored &rarr; flip left&harr;right; upside down &rarr; flip top&harr;bottom; wrong colours &rarr; change colour order. Resend until it matches the preview. Saved on this device.</p>
+</details>
+
+<div class="card" style="margin-top:12px"><div id="log"></div></div>
+
+<details class="card">
+  <summary>Diagnostics</summary>
+  <button id="copy" class="secondary">Copy log</button>
+  <pre id="diag"></pre>
+</details>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
